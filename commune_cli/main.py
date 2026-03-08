@@ -14,6 +14,9 @@ from .state import AppState
 
 from .commands import (
     config_cmd,
+    context,
+    describe,
+    doctor,
     domains,
     inboxes,
     messages,
@@ -41,6 +44,12 @@ app = typer.Typer(
     context_settings={"help_option_names": ["-h", "--help"]},
 )
 
+# ── Agent-native commands (top-level) ─────────────────────────────────────
+app.add_typer(describe.app,     name="describe",      help="Machine-readable API surface manifest.")
+app.add_typer(context.app,      name="context",       help="Full org snapshot: auth, domains, inboxes, delivery, credits.")
+app.add_typer(doctor.app,       name="doctor",        help="Health diagnostics: auth, connectivity, DNS, webhooks.")
+
+# ── Resource commands ─────────────────────────────────────────────────────
 app.add_typer(config_cmd.app,  name="config",      help="Manage CLI configuration (~/.commune/config.toml).")
 app.add_typer(domains.app,     name="domains",      help="Domain management: list, create, verify, DNS records.")
 app.add_typer(inboxes.app,     name="inboxes",      help="Inbox management: create, update, delete, webhooks, extraction schema.")

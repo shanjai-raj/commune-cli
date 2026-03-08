@@ -36,18 +36,27 @@ _COLORS = [
 
 # ── Command registry ───────────────────────────────────────────────────────
 
+_AGENT_COMMANDS = [
+    ("describe", "full machine-readable API manifest — one call, full understanding"),
+    ("context",  "org snapshot — auth, domains, inboxes, delivery, credits"),
+    ("doctor",   "health diagnostics — auth, connectivity, DNS, webhooks"),
+]
+
 _COMMANDS = [
-    ("inboxes",     "create · list · update · delete · webhooks · schema"),
-    ("messages",    "send · list  (pass --thread-id to reply)"),
-    ("threads",     "list · messages · contacts · companies · set-status · tags · assign"),
-    ("domains",     "list · create · verify · records"),
-    ("search",      "full-text search across threads"),
-    ("delivery",    "metrics · events · suppressions · check"),
-    ("webhooks",    "deliveries · retry · health"),
-    ("attachments", "upload · get · url"),
-    ("dmarc",       "list · summary"),
-    ("data",        "deletion-request · confirm"),
-    ("config",      "set · show · register · status · keys list · keys revoke"),
+    ("inboxes",       "create · list · update · delete · webhooks · schema"),
+    ("messages",      "send · list  (pass --thread-id to reply)"),
+    ("threads",       "list · messages · set-status · tags · assign · contacts"),
+    ("domains",       "list · create · verify · records"),
+    ("search",        "semantic full-text search across threads"),
+    ("delivery",      "metrics · events · suppressions · check"),
+    ("webhooks",      "deliveries · retry · health"),
+    ("sms",           "send · conversations · thread · search"),
+    ("phone-numbers", "list · get · available · provision"),
+    ("attachments",   "upload · get · url"),
+    ("credits",       "balance · bundles · checkout"),
+    ("dmarc",         "reports · summary"),
+    ("data",          "deletion-request · confirm · status"),
+    ("config",        "set · show · register · status · keys"),
 ]
 
 _TAGLINE = "email infrastructure for agents"
@@ -66,9 +75,22 @@ def _ascii_art(n: int) -> Text:
     return t
 
 
+def _agent_commands_table() -> Group:
+    """Build the agent-native commands section with a highlighted label."""
+    label = Text("  agent-native", style="bold rgb(0,210,255)")
+
+    tbl = Table(box=None, show_header=False, padding=(0, 1), expand=False)
+    tbl.add_column("cmd", style="bold bright_cyan", no_wrap=True, min_width=16)
+    tbl.add_column("sep", style="dim", no_wrap=True, width=1)
+    tbl.add_column("desc", style="white")
+    for cmd, desc in _AGENT_COMMANDS:
+        tbl.add_row(cmd, "·", desc)
+    return Group(label, tbl)
+
+
 def _commands_table() -> Table:
     tbl = Table(box=None, show_header=False, padding=(0, 1), expand=False)
-    tbl.add_column("cmd", style="bold bright_cyan", no_wrap=True, min_width=12)
+    tbl.add_column("cmd", style="bold bright_cyan", no_wrap=True, min_width=16)
     tbl.add_column("sep", style="dim", no_wrap=True, width=1)
     tbl.add_column("desc", style="dim white")
     for cmd, desc in _COMMANDS:
@@ -79,6 +101,7 @@ def _commands_table() -> Table:
 def _frame(
     n: int,
     tagline: str = "",
+    show_agent: bool = False,
     show_commands: bool = False,
     show_footer: bool = False,
 ) -> Group:
@@ -95,7 +118,12 @@ def _frame(
         sub.append(f"   v{__version__}", style="bold yellow")
     parts.append(Padding(sub, (0, 2, 0, 2)))
 
-    # Commands section
+    # Agent-native commands (highlighted section)
+    if show_agent:
+        parts.append(Padding(Rule(characters="─", style="rgb(0,178,255)"), (1, 2, 0, 2)))
+        parts.append(Padding(_agent_commands_table(), (0, 2, 0, 2)))
+
+    # Resource commands
     if show_commands:
         parts.append(Padding(Rule(characters="─", style="dim"), (1, 2, 0, 2)))
         parts.append(Padding(_commands_table(), (0, 2, 0, 2)))
@@ -106,9 +134,9 @@ def _frame(
         foot.append("\n")
         foot.append("commune <command> --help", style="bold cyan")
         foot.append("  ·  ", style="dim")
-        foot.append("commune.email", style="dim cyan underline")
+        foot.append("commune describe --json", style="bold cyan")
         foot.append("  ·  ", style="dim")
-        foot.append("docs.commune.email", style="dim cyan underline")
+        foot.append("commune.email", style="dim cyan underline")
         parts.append(Padding(foot, (0, 2, 1, 2)))
 
     return Group(*parts)
@@ -126,7 +154,7 @@ def show_banner(no_color: bool = False) -> None:
 
     if not console.is_terminal:
         # Pipe / agent mode — static, no ANSI escape sequences
-        console.print(_frame(len(_ASCII_LINES), _TAGLINE, True, True))
+        console.print(_frame(len(_ASCII_LINES), _TAGLINE, True, True, True))
         return
 
     tagline = _TAGLINE
@@ -147,11 +175,15 @@ def show_banner(no_color: bool = False) -> None:
             time.sleep(0.013)
             live.update(_frame(len(_ASCII_LINES), tagline[:i]))
 
+        time.sleep(0.12)
+
+        # Stage 3: Agent-native commands (highlighted)
+        live.update(_frame(len(_ASCII_LINES), tagline, show_agent=True))
         time.sleep(0.15)
 
-        # Stage 3: Commands drop in
-        live.update(_frame(len(_ASCII_LINES), tagline, show_commands=True))
+        # Stage 4: Resource commands drop in
+        live.update(_frame(len(_ASCII_LINES), tagline, show_agent=True, show_commands=True))
         time.sleep(0.08)
 
-        # Stage 4: Footer appears
-        live.update(_frame(len(_ASCII_LINES), tagline, True, True))
+        # Stage 5: Footer appears
+        live.update(_frame(len(_ASCII_LINES), tagline, True, True, True))

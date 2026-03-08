@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "commune-cli"
-version = "0.1.9"
+version = "0.2.0"
 description = "Official CLI for the Commune email API — agent-native, pipe-friendly, covers every API surface."
 readme = "README.md"
 requires-python = ">=3.9"
