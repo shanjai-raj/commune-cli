@@ -1,6 +1,8 @@
-"""CommuneClient — thin httpx wrapper with API key auth.
+"""CommuneClient — thin httpx wrapper with API key or x402 wallet auth.
 
-Auth: Authorization: Bearer comm_...
+Auth modes:
+  1. API key: Authorization: Bearer comm_...
+  2. x402 wallet: pay-per-call with USDC (handles 402 responses automatically)
 
 Raises:
   httpx.ConnectError / httpx.TimeoutException — caller wraps with network_error()
@@ -32,19 +34,48 @@ class CommuneClient:
         self,
         base_url: str,
         api_key: Optional[str] = None,
+        wallet_key: Optional[str] = None,
         timeout: float = DEFAULT_TIMEOUT,
     ):
         self.base_url = base_url.rstrip("/")
         self.api_key = api_key
+        self.wallet_key = wallet_key
         self.timeout = timeout
+        self._x402_client: Any = None
 
     @classmethod
     def from_state(cls, state: AppState) -> "CommuneClient":
         return cls(
             base_url=state.base_url,
             api_key=state.api_key,
+            wallet_key=state.wallet_key,
             timeout=DEFAULT_TIMEOUT,
         )
+
+    def _get_x402_client(self) -> Any:
+        """Lazily initialize x402 client from wallet key."""
+        if self._x402_client is not None:
+            return self._x402_client
+        if not self.wallet_key:
+            return None
+        try:
+            from x402 import x402Client
+            from x402.mechanisms.evm.exact import ExactEvmScheme
+            from eth_account import Account
+
+            key = self.wallet_key if self.wallet_key.startswith("0x") else f"0x{self.wallet_key}"
+            signer = Account.from_key(key)
+            self._x402_client = x402Client()
+            self._x402_client.register("eip155:*", ExactEvmScheme(signer=signer))
+            return self._x402_client
+        except ImportError:
+            import sys
+            print(
+                "Warning: --wallet-key is set but x402 dependencies are missing.\n"
+                "  Install them: pip install x402[evm] eth_account",
+                file=sys.stderr,
+            )
+            return None
 
     def _base_headers(self) -> dict[str, str]:
         headers: dict[str, str] = {
@@ -57,6 +88,38 @@ class CommuneClient:
 
     def _url(self, path: str) -> str:
         return self.base_url + path
+
+    def _handle_402(
+        self,
+        resp: httpx.Response,
+        method: str,
+        path: str,
+        **kwargs: Any,
+    ) -> httpx.Response:
+        """Handle 402 Payment Required by signing an x402 payment and retrying."""
+        x402 = self._get_x402_client()
+        if x402 is None:
+            return resp  # No wallet — return the 402 as-is
+
+        try:
+            body = resp.json()
+        except Exception:
+            return resp
+
+        accepts = body.get("accepts", [])
+        if not accepts:
+            return resp
+
+        try:
+            payment_payload = x402.create_payment_payload(accepts)
+        except Exception:
+            return resp
+
+        headers = dict(kwargs.pop("headers", self._base_headers()))
+        headers["PAYMENT-SIGNATURE"] = payment_payload
+
+        with httpx.Client(timeout=self.timeout) as client:
+            return client.request(method, self._url(path), headers=headers, **kwargs)
 
     def _req(
         self,
@@ -78,7 +141,7 @@ class CommuneClient:
             params = {k: v for k, v in params.items() if v is not None}
 
         with httpx.Client(timeout=self.timeout) as client:
-            return client.request(
+            resp = client.request(
                 method,
                 self._url(path),
                 headers=headers,
@@ -86,6 +149,12 @@ class CommuneClient:
                 json=json,
                 content=data,
             )
+
+        # Auto-pay with x402 if we get a 402 and have a wallet configured
+        if resp.status_code == 402 and self.wallet_key:
+            resp = self._handle_402(resp, method, path, params=params, json=json, content=data)
+
+        return resp
 
     def get(self, path: str, *, params: Optional[dict[str, Any]] = None) -> httpx.Response:
         return self._req("GET", path, params=params)

@@ -17,6 +17,7 @@ class AppState:
 
     # --- auth (resolved: flag > env > config) ---
     api_key: Optional[str] = None
+    wallet_key: Optional[str] = None
 
     # --- connection ---
     base_url: str = "https://api.commune.email"
@@ -34,4 +35,4 @@ class AppState:
         return self.json_output or not self.is_tty()
 
     def has_any_auth(self) -> bool:
-        return bool(self.api_key)
+        return bool(self.api_key) or bool(self.wallet_key)

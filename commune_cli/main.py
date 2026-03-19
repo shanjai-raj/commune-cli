@@ -37,7 +37,8 @@ app = typer.Typer(
         "Commune email API — official CLI.\n\n"
         "Covers every API surface: domains, inboxes, messages, threads, "
         "attachments, search, delivery, webhooks, DMARC, and data.\n\n"
-        "Auth: set COMMUNE_API_KEY or use --api-key."
+        "Auth: set COMMUNE_API_KEY (or --api-key) for API key auth, "
+        "or COMMUNE_WALLET_KEY (or --wallet-key) for x402 pay-per-call."
     ),
     no_args_is_help=False,
     context_settings={"help_option_names": ["-h", "--help"]},
@@ -74,6 +75,13 @@ def root(
         help="Commune API key (comm_...). Overrides config file.",
         show_default=False,
     ),
+    wallet_key: Optional[str] = typer.Option(
+        None,
+        "--wallet-key",
+        envvar="COMMUNE_WALLET_KEY",
+        help="x402 wallet private key (0x...). Pay-per-call with USDC.",
+        show_default=False,
+    ),
     base_url: Optional[str] = typer.Option(
         None,
         "--base-url",
@@ -97,10 +105,12 @@ def root(
     cfg = load_config()
 
     resolved_api_key = api_key or cfg.get("api_key")
+    resolved_wallet_key = wallet_key or cfg.get("wallet_key")
     resolved_base_url = base_url or cfg.get("base_url") or "https://api.commune.email"
 
     state = AppState(
         api_key=resolved_api_key,
+        wallet_key=resolved_wallet_key,
         base_url=resolved_base_url,
         json_output=json_output,
         quiet=quiet,

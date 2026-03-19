@@ -110,6 +110,7 @@ def delete_value(key: str) -> bool:
 
 KNOWN_KEYS = {
     "api_key": "Commune API key (comm_...)",
+    "wallet_key": "x402 wallet private key (0x...) — pay-per-call with USDC",
     "base_url": "API base URL (default: https://api.commune.email)",
 }
 
